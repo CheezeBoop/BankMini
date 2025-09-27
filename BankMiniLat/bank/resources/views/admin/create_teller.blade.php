@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="container">
-  <h3>Buat Teller Baru</h3>
+  <h3 class="mb-3">Buat Teller Baru</h3>
 
   {{-- Notifikasi sukses --}}
   @if (session('success'))
@@ -22,12 +22,42 @@
     </div>
   @endif
 
-  <form method="POST" action="{{ route('admin.teller.store') }}">
-    @csrf
-    <input name="name" value="{{ old('name') }}" placeholder="Name" class="form-control mb-2" required>
-    <input name="email" value="{{ old('email') }}" placeholder="Email" class="form-control mb-2" required>
-    <input name="password" placeholder="Password" type="password" class="form-control mb-2" required>
-    <button class="btn btn-success">Simpan</button>
-  </form>
+  <div class="card">
+    <div class="card-body">
+      <form method="POST" action="{{ route('admin.teller.store') }}">
+        @csrf
+
+        <div class="mb-3">
+          <label for="name" class="form-label">Nama</label>
+          <input id="name" name="name" value="{{ old('name') }}" 
+                 type="text" class="form-control @error('name') is-invalid @enderror" required>
+          @error('name')
+            <div class="invalid-feedback">{{ $message }}</div>
+          @enderror
+        </div>
+
+        <div class="mb-3">
+          <label for="email" class="form-label">Email</label>
+          <input id="email" name="email" value="{{ old('email') }}" 
+                 type="email" class="form-control @error('email') is-invalid @enderror" required>
+          @error('email')
+            <div class="invalid-feedback">{{ $message }}</div>
+          @enderror
+        </div>
+
+        <div class="mb-3">
+          <label for="password" class="form-label">Password</label>
+          <input id="password" name="password" type="password" 
+                 class="form-control @error('password') is-invalid @enderror" required>
+          @error('password')
+            <div class="invalid-feedback">{{ $message }}</div>
+          @enderror
+        </div>
+
+        <button class="btn btn-success">Simpan</button>
+        <a href="{{ route('admin.dashboard') }}" class="btn btn-secondary">Batal</a>
+      </form>
+    </div>
+  </div>
 </div>
 @endsection

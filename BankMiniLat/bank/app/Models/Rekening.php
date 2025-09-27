@@ -11,15 +11,21 @@ class Rekening extends Model
 
     protected $table = 'rekening';
 
-    protected $fillable = ['user_id', 'saldo'];
+    protected $fillable = [
+        'nasabah_id',
+        'no_rekening',
+        'tanggal_buka',
+        'status',
+        'saldo',
+    ];
 
-    public function user()
+    public function nasabah()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Nasabah::class, 'nasabah_id');
     }
 
     public function transaksi()
     {
-        return $this->hasMany(Transaksi::class);
+        return $this->hasMany(Transaksi::class, 'rekening_id');
     }
 }

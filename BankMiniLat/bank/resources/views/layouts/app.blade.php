@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Bank Mini</title>
+    {{-- Bootstrap CSS --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -23,8 +24,14 @@
     </div>
   </div>
 </nav>
+
 <div class="container">
     @yield('content')
 </div>
+
+{{-- Bootstrap JS + Popper (Wajib untuk Modal, Dropdown, dsb) --}}
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+
 </body>
 </html>
