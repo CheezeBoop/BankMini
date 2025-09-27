@@ -9,6 +9,8 @@ class Rekening extends Model
 {
     use HasFactory;
 
+    protected $table = 'rekening';
+
     protected $fillable = ['user_id', 'saldo'];
 
     public function user()

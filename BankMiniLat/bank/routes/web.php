@@ -12,7 +12,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth'])->group(function(){
   // common dashboard
-  Route::get('/home',[DashboardController::class,'index'])->name('home');
+  Route::get('/dashboard',[DashboardController::class,'index'])->name('dashboard');
 
   // Nasabah actions (login user role)
   Route::post('/deposit',[TransactionController::class,'requestDeposit'])->name('deposit.request');
@@ -37,6 +37,5 @@ Route::middleware(['auth','role:admin'])->prefix('admin')->group(function(){
   Route::delete('/teller/{id}',[AdminController::class,'removeTeller'])->name('admin.teller.delete');
   Route::post('/transaksi/{id}/approve',[AdminController::class,'approveTransaction'])->name('admin.transaksi.approve');
 });
-
 
 require __DIR__.'/auth.php';

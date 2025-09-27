@@ -17,8 +17,15 @@ class TellerController extends Controller
 
     public function dashboard()
     {
+        // semua nasabah (rekening + user)
         $nasabahs = Rekening::with('user')->get();
-        return view('teller.dashboard', compact('nasabahs'));
+
+        // semua transaksi pending (dengan relasi rekening)
+        $pending = Transaksi::where('status', 'PENDING')
+            ->with('rekening')
+            ->get();
+
+        return view('teller.dashboard', compact('nasabahs', 'pending'));
     }
 
     public function setor(Request $r, $id)
@@ -28,10 +35,10 @@ class TellerController extends Controller
         $rek = Rekening::findOrFail($id);
 
         $trx = Transaksi::create([
-            'rekening_id' => $rek->id,
-            'jenis'       => 'SETOR',
-            'nominal'     => $r->nominal,
-            'status'      => $r->nominal > 1000000 ? 'PENDING' : 'CONFIRMED',
+            'rekening_id'    => $rek->id,
+            'jenis'          => 'SETOR',
+            'nominal'        => $r->nominal,
+            'status'         => $r->nominal > 1000000 ? 'PENDING' : 'CONFIRMED',
             'admin_approved' => $r->nominal > 1000000 ? false : true
         ]);
 
@@ -41,11 +48,11 @@ class TellerController extends Controller
         }
 
         AuditLog::create([
-            'user_id' => Auth::id(),
-            'aksi'    => 'setor',
-            'entitas' => 'transaksi',
+            'user_id'    => Auth::id(),
+            'aksi'       => 'setor',
+            'entitas'    => 'transaksi',
             'entitas_id' => $trx->id,
-            'ip_addr' => $r->ip()
+            'ip_addr'    => $r->ip()
         ]);
 
         return redirect()->back()->with('success', 'Setoran berhasil');
@@ -62,10 +69,10 @@ class TellerController extends Controller
         }
 
         $trx = Transaksi::create([
-            'rekening_id' => $rek->id,
-            'jenis'       => 'TARIK',
-            'nominal'     => $r->nominal,
-            'status'      => $r->nominal > 1000000 ? 'PENDING' : 'CONFIRMED',
+            'rekening_id'    => $rek->id,
+            'jenis'          => 'TARIK',
+            'nominal'        => $r->nominal,
+            'status'         => $r->nominal > 1000000 ? 'PENDING' : 'CONFIRMED',
             'admin_approved' => $r->nominal > 1000000 ? false : true
         ]);
 
@@ -75,11 +82,11 @@ class TellerController extends Controller
         }
 
         AuditLog::create([
-            'user_id' => Auth::id(),
-            'aksi'    => 'tarik',
-            'entitas' => 'transaksi',
+            'user_id'    => Auth::id(),
+            'aksi'       => 'tarik',
+            'entitas'    => 'transaksi',
             'entitas_id' => $trx->id,
-            'ip_addr' => $r->ip()
+            'ip_addr'    => $r->ip()
         ]);
 
         return redirect()->back()->with('success', 'Penarikan berhasil');
