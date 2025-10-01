@@ -1,4 +1,4 @@
-<?php
++<?php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\TellerController;
 use App\Http\Controllers\NasabahController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\SettingsController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -32,15 +33,23 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
 
     // Teller management
     Route::get('/teller/create', [AdminController::class, 'createTellerForm'])->name('admin.teller.create');
-    Route::post('/teller/store', [AdminController::class, 'storeTeller'])->name('admin.teller.store');
+    Route::post('/teller/store',  [AdminController::class, 'storeTeller'])->name('admin.teller.store');
+    Route::get('/teller/{id}/edit', [AdminController::class, 'editTeller'])->name('admin.teller.edit');        // ✅ NEW
+    Route::put('/teller/{id}',      [AdminController::class, 'updateTeller'])->name('admin.teller.update');     // ✅ NEW
     Route::delete('/teller/{id}', [AdminController::class, 'removeTeller'])->name('admin.teller.remove');
 
     // Approve transaksi
     Route::post('/transaksi/{id}/approve', [AdminController::class, 'approveTransaction'])
         ->name('admin.transaksi.approve');
 
-    // Log kategori (akun, setor, tarik) → untuk modal/pagination
+    // Log kategori (akun, setor, tarik)
     Route::get('/log/{type}', [AdminController::class, 'logByType'])->name('admin.log.type');
+
+    // Settings perusahaan  🔧 perbaiki path ganda /admin/admin/settings
+    Route::get('/settings', [SettingsController::class, 'index'])->name('admin.settings.index');    // ✅ FIX
+    Route::post('/settings', [SettingsController::class, 'update'])->name('admin.settings.update');  // ✅ FIX
+
+    Route::get('/logs/export', [AdminController::class, 'exportLogs'])->name('admin.logs.export');
 });
 
 /*
@@ -78,6 +87,12 @@ Route::prefix('teller')->middleware(['auth', 'role:teller'])->group(function () 
 */
 Route::prefix('nasabah')->middleware(['auth', 'role:nasabah'])->group(function () {
     Route::get('/dashboard', [NasabahController::class, 'dashboard'])->name('nasabah.dashboard');
+
+    // ✅ PROFIL SAYA (tetap dalam layout nasabah)
+    Route::get('/profile', [NasabahController::class, 'profile'])->name('nasabah.profile');
+
+    // Riwayat transaksi
+    Route::get('/transaksi', [TransactionController::class, 'history'])->name('nasabah.transaksi.index');
 
     // Request setor/tarik
     Route::post('/deposit/request', [TransactionController::class, 'requestDeposit'])

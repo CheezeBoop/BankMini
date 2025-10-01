@@ -12,6 +12,9 @@ use App\Models\Transaksi;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Setting;
+use App\Exports\NasabahExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class TellerController extends Controller
 {
@@ -21,62 +24,78 @@ class TellerController extends Controller
     }
 
     /**
-     * Dashboard Teller
+     * Pastikan settings ada
      */
-    public function dashboard(Request $request)
-{
-    $query = Rekening::with('nasabah');
-
-    if ($request->has('search') && $request->search != '') {
-        $search = $request->search;
-        $query->whereHas('nasabah', function ($q) use ($search) {
-            $q->where('nama', 'like', "%{$search}%")
-              ->orWhere('nis_nip', 'like', "%{$search}%")
-              ->orWhere('email', 'like', "%{$search}%");
-        })
-        ->orWhere('no_rekening', 'like', "%{$search}%");
+    protected function ensureSetting()
+    {
+        $setting = Setting::first();
+        if (!$setting) {
+            $setting = Setting::create([
+                'minimal_setor'  => 10000,
+                'maksimal_setor' => 10000000,
+                'minimal_tarik'  => 10000,
+                'maksimal_tarik' => 5000000,
+            ]);
+        }
+        return $setting;
     }
 
-    // 🚀 paginate 10 per halaman
-    $nasabahs = $query->paginate(10)->withQueryString();
+    public function dashboard(Request $request)
+    {
+        $query = Rekening::with('nasabah');
 
-    $pending = Transaksi::where('status', 'PENDING')->with('rekening')->get();
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('nasabah', function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%")
+                  ->orWhere('nis_nip', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            })
+            ->orWhere('no_rekening', 'like', "%{$search}%");
+        }
 
-    return view('teller.dashboard', compact('nasabahs', 'pending'));
-}
+        $nasabahs = $query->paginate(10)->withQueryString();
+        $pending = Transaksi::where('status', 'PENDING')->with('rekening')->get();
 
+        return view('teller.dashboard', compact('nasabahs', 'pending'));
+    }
 
-
-    /**
-     * Setor tunai
-     */
     public function setor(Request $r, $id)
     {
-        $r->validate(['nominal' => 'required|numeric|min:1']);
+        $r->validate([
+            'nominal'    => 'required|numeric|min:1',
+            'keterangan' => 'nullable|string|max:255',
+        ]);
+
         $rek = Rekening::with('nasabah')->findOrFail($id);
 
         if ($rek->status !== 'AKTIF' || $rek->nasabah->status !== 'AKTIF') {
             return back()->with('error', 'Rekening atau nasabah tidak aktif.');
         }
 
-        DB::transaction(function () use ($r, $rek) {
-            $needsApprove = $r->nominal > 1_000_000;
+        $setting = $this->ensureSetting();
 
+        if ($r->nominal < $setting->minimal_setor) {
+            return back()->with('error', 'Setoran minimal Rp ' . number_format($setting->minimal_setor, 0, ',', '.'));
+        }
+        if ($r->nominal > $setting->maksimal_setor) {
+            return back()->with('error', 'Setoran maksimal Rp ' . number_format($setting->maksimal_setor, 0, ',', '.'));
+        }
+
+        DB::transaction(function () use ($r, $rek) {
             $trx = Transaksi::create([
                 'rekening_id'    => $rek->id,
-                'user_id'        => Auth::id(), // teller yang input
+                'user_id'        => Auth::id(),
                 'jenis'          => 'SETOR',
                 'nominal'        => $r->nominal,
-                'status'         => $needsApprove ? 'PENDING' : 'CONFIRMED',
-                'admin_approved' => !$needsApprove,
-                'saldo_setelah'  => $needsApprove ? null : ($rek->saldo + $r->nominal),
-                'keterangan'     => $r->keterangan ?? null,
+                'status'         => 'CONFIRMED',
+                'admin_approved' => true,
+                'saldo_setelah'  => $rek->saldo + $r->nominal,
+                'keterangan'     => $r->keterangan,
             ]);
 
-            if ($trx->status === 'CONFIRMED') {
-                $rek->saldo += $r->nominal;
-                $rek->save();
-            }
+            $rek->saldo += $r->nominal;
+            $rek->save();
 
             AuditLog::create([
                 'user_id'    => Auth::id(),
@@ -87,43 +106,48 @@ class TellerController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Setoran berhasil');
+        return back()->with('success', 'Setoran berhasil.');
     }
 
-    /**
-     * Tarik tunai
-     */
     public function tarik(Request $r, $id)
     {
-        $r->validate(['nominal' => 'required|numeric|min:1']);
+        $r->validate([
+            'nominal'    => 'required|numeric|min:1',
+            'keterangan' => 'nullable|string|max:255',
+        ]);
+
         $rek = Rekening::with('nasabah')->findOrFail($id);
 
         if ($rek->status !== 'AKTIF' || $rek->nasabah->status !== 'AKTIF') {
             return back()->with('error', 'Rekening atau nasabah tidak aktif.');
         }
-
         if ($rek->saldo < $r->nominal) {
-            return back()->with('error', 'Saldo tidak cukup');
+            return back()->with('error', 'Saldo tidak cukup.');
+        }
+
+        $setting = $this->ensureSetting();
+
+        if ($r->nominal < $setting->minimal_tarik) {
+            return back()->with('error', 'Tarik minimal Rp ' . number_format($setting->minimal_tarik, 0, ',', '.'));
+        }
+        if ($r->nominal > $setting->maksimal_tarik) {
+            return back()->with('error', 'Tarik maksimal Rp ' . number_format($setting->maksimal_tarik, 0, ',', '.'));
         }
 
         DB::transaction(function () use ($r, $rek) {
-            $needsApprove = $r->nominal > 1_000_000;
-
             $trx = Transaksi::create([
                 'rekening_id'    => $rek->id,
-                'user_id'        => Auth::id(), // teller yang input
+                'user_id'        => Auth::id(),
                 'jenis'          => 'TARIK',
                 'nominal'        => $r->nominal,
-                'status'         => $needsApprove ? 'PENDING' : 'CONFIRMED',
-                'admin_approved' => !$needsApprove,
-                'saldo_setelah'  => $needsApprove ? null : ($rek->saldo - $r->nominal),
-                'keterangan'     => $r->keterangan ?? null,
+                'status'         => 'CONFIRMED',
+                'admin_approved' => true,
+                'saldo_setelah'  => $rek->saldo - $r->nominal,
+                'keterangan'     => $r->keterangan,
             ]);
 
-            if ($trx->status === 'CONFIRMED') {
-                $rek->saldo -= $r->nominal;
-                $rek->save();
-            }
+            $rek->saldo -= $r->nominal;
+            $rek->save();
 
             AuditLog::create([
                 'user_id'    => Auth::id(),
@@ -134,12 +158,89 @@ class TellerController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Penarikan berhasil');
+        return back()->with('success', 'Penarikan berhasil.');
     }
 
-    /**
-     * Buat nasabah baru
-     */
+    public function rejectTransaction($id)
+    {
+        DB::transaction(function () use ($id) {
+            $trx = Transaksi::findOrFail($id);
+            
+            if ($trx->status !== 'PENDING') {
+                throw new \Exception('Transaksi sudah diproses');
+            }
+            
+            $trx->update([
+                'status' => 'REJECTED',
+                'admin_approved' => false,
+                'keterangan' => $trx->keterangan . ' (Ditolak oleh teller)'
+            ]);
+
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'aksi' => 'reject_transaksi',
+                'entitas' => 'transaksi',
+                'entitas_id' => $trx->id,
+                'ip_addr' => request()->ip(),
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaksi berhasil ditolak'
+        ]);
+    }
+
+    public function getTransactionDetails($id)
+    {
+        $transaction = Transaksi::with(['rekening.nasabah', 'user'])->findOrFail($id);
+        
+        $html = view('teller.partials.transaction-details', compact('transaction'))->render();
+        
+        return response()->json([
+            'success' => true,
+            'html' => $html
+        ]);
+    }
+
+    public function getAccountHistory($id)
+    {
+        $rekening = Rekening::with(['nasabah', 'transaksi' => function($q) {
+            $q->orderBy('created_at', 'desc')->limit(20);
+        }])->findOrFail($id);
+        
+        return view('teller.account-history', compact('rekening'));
+    }
+
+    public function printStatement($id)
+    {
+        $rekening = Rekening::with(['nasabah', 'transaksi' => function($q) {
+            $q->where('status', 'CONFIRMED')->orderBy('created_at', 'desc');
+        }])->findOrFail($id);
+        
+        return view('teller.print.statement', compact('rekening'));
+    }
+
+    public function exportExcel()
+    {
+        $nasabahs = Rekening::with('nasabah')->get();
+        return Excel::download(new NasabahExport($nasabahs), 'laporan-nasabah-' . date('Y-m-d') . '.xlsx');
+    }
+
+    public function printDailyReport()
+    {
+        $today = now()->toDateString();
+        
+        $data = [
+            'total_nasabah'   => Nasabah::count(),
+            'total_saldo'     => Rekening::sum('saldo'),
+            'transaksi_hari'  => Transaksi::whereDate('created_at', $today)->get(),
+            'pending_count'   => Transaksi::where('status', 'PENDING')->count(),
+        ];
+        
+        return view('teller.print.daily-report', $data);
+    }
+
     public function storeNasabah(Request $r)
     {
         $r->validate([
@@ -156,7 +257,6 @@ class TellerController extends Controller
         $roleId = Role::firstOrCreate(['name' => 'nasabah'])->id;
 
         DB::transaction(function () use ($r, $roleId) {
-            // 1) Buat akun user untuk login
             $user = User::create([
                 'name'     => $r->name,
                 'email'    => $r->email,
@@ -164,7 +264,6 @@ class TellerController extends Controller
                 'role_id'  => $roleId,
             ]);
 
-            // 2) Buat data profil nasabah
             $nasabah = Nasabah::create([
                 'user_id'       => $user->id,
                 'nis_nip'       => $r->nis_nip,
@@ -176,7 +275,6 @@ class TellerController extends Controller
                 'status'        => 'AKTIF',
             ]);
 
-            // 3) Buat rekening untuk nasabah ini
             $noRek = 'REK' . str_pad((string)$nasabah->id, 6, '0', STR_PAD_LEFT);
 
             Rekening::create([
@@ -187,7 +285,6 @@ class TellerController extends Controller
                 'saldo'        => $r->saldo,
             ]);
 
-            // 4) Log audit
             AuditLog::create([
                 'user_id'    => Auth::id(),
                 'aksi'       => 'create_nasabah',
@@ -200,9 +297,6 @@ class TellerController extends Controller
         return back()->with('success', 'Nasabah baru berhasil dibuat!');
     }
 
-    /**
-     * Konfirmasi transaksi pending
-     */
     public function confirmTransaksi($id)
     {
         DB::transaction(function () use ($id) {
@@ -243,34 +337,32 @@ class TellerController extends Controller
     }
 
     public function updateNasabah(Request $r, $id)
-{
-    $r->validate([
-        'nama'          => 'required|string|max:255',
-        'email'         => 'required|email',
-        'no_hp'         => 'nullable|string|max:20',
-        'alamat'        => 'nullable|string',
-        'jenis_kelamin' => 'nullable|in:L,P',
-    ]);
+    {
+        $r->validate([
+            'nama'          => 'required|string|max:255',
+            'email'         => 'required|email',
+            'no_hp'         => 'nullable|string|max:20',
+            'alamat'        => 'nullable|string',
+            'jenis_kelamin' => 'nullable|in:L,P',
+        ]);
 
-    $rekening = \App\Models\Rekening::findOrFail($id);
-    $nasabah = $rekening->nasabah; // relasi ke tabel nasabah
+        $rekening = Rekening::findOrFail($id);
+        $nasabah  = $rekening->nasabah;
 
-    if (!$nasabah) {
-        return back()->with('error', 'Data nasabah tidak ditemukan.');
+        if (!$nasabah) {
+            return back()->with('error', 'Data nasabah tidak ditemukan.');
+        }
+
+        $nasabah->update([
+            'nis_nip'       => $r->nis_nip,
+            'nama'          => $r->nama,
+            'email'         => $r->email,
+            'no_hp'         => $r->no_hp,
+            'alamat'        => $r->alamat,
+            'jenis_kelamin' => $r->jenis_kelamin,
+            'status'        => $r->status,
+        ]);
+
+        return back()->with('success', 'Profil nasabah berhasil diperbarui.');
     }
-
-    $nasabah->update([
-        'nis_nip'       => $r->nis_nip,
-        'nama'          => $r->nama,
-        'email'         => $r->email,
-        'no_hp'         => $r->no_hp,
-        'alamat'        => $r->alamat,
-        'jenis_kelamin' => $r->jenis_kelamin,
-        'status'        => $r->status,
-    ]);
-
-    return back()->with('success', 'Profil nasabah berhasil diperbarui.');
-}
-
-
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Auth;
 use App\Models\Nasabah;
+use App\Models\Setting;
 
 class NasabahController extends Controller
 {
@@ -12,25 +13,46 @@ class NasabahController extends Controller
         $this->middleware(['auth', 'role:nasabah']);
     }
 
-    /**
-     * Dashboard Nasabah
-     */
     public function dashboard()
     {
-        // Ambil data nasabah dari user yang login
+        // Ambil nasabah berdasarkan user yang login
         $nasabah = Nasabah::where('user_id', Auth::id())
-            ->with(['rekening.transaksi' => function ($q) {
-                $q->orderBy('created_at', 'desc');
-            }])
+            ->with([
+                'rekening.transaksi' => function ($q) {
+                    $q->orderBy('created_at', 'desc');
+                }
+            ])
             ->first();
 
         if (!$nasabah) {
-            return view('nasabah.dashboard')->with('error', 'Data nasabah tidak ditemukan.');
+            return redirect()->route('home')
+                ->with('error', 'Data nasabah tidak ditemukan.');
         }
 
-        // karena 1 nasabah hanya punya 1 rekening
         $rekening = $nasabah->rekening ?? null;
 
-        return view('nasabah.dashboard', compact('nasabah', 'rekening'));
+        // Ambil setting dari database
+        $setting = Setting::first();
+
+        // Jika tabel belum ada isinya, buat default agar tidak error
+        if (!$setting) {
+            $setting = (object) [
+                'minimal_setor'  => 10000,
+                'maksimal_setor' => 10000000,
+                'minimal_tarik'  => 10000,
+                'maksimal_tarik' => 5000000,
+            ];
+        }
+
+        return view('nasabah.dashboard', compact('nasabah', 'rekening', 'setting'));
+    }
+
+    public function profile()
+    {
+        $nasabah = Nasabah::where('user_id', Auth::id())
+                    ->with('rekening')
+                    ->firstOrFail();
+
+        return view('nasabah.profile', compact('nasabah'));
     }
 }
