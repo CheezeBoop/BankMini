@@ -86,16 +86,19 @@ Route::prefix('teller')->middleware(['auth', 'role:teller'])->group(function () 
 |--------------------------------------------------------------------------
 */
 Route::prefix('nasabah')->middleware(['auth', 'role:nasabah'])->group(function () {
+    // Dashboard & profil
     Route::get('/dashboard', [NasabahController::class, 'dashboard'])->name('nasabah.dashboard');
+    Route::get('/profile',   [NasabahController::class, 'profile'])->name('nasabah.profile');
 
-    // ✅ PROFIL SAYA (tetap dalam layout nasabah)
-    Route::get('/profile', [NasabahController::class, 'profile'])->name('nasabah.profile');
-
-    // Riwayat transaksi
+    // Riwayat transaksi (index)
     Route::get('/transaksi', [TransactionController::class, 'history'])->name('nasabah.transaksi.index');
 
-    // Request setor/tarik
-    Route::post('/deposit/request', [TransactionController::class, 'requestDeposit'])
+    // Form khusus Setor / Tarik (lihat controller)
+    Route::get('/deposit',  [TransactionController::class, 'showDepositForm'])->name('nasabah.deposit.form');
+    Route::get('/withdraw', [TransactionController::class, 'showWithdrawForm'])->name('nasabah.withdraw.form');
+
+    // Proses request (POST)
+    Route::post('/deposit/request',  [TransactionController::class, 'requestDeposit'])
         ->name('nasabah.deposit.request');
     Route::post('/withdraw/request', [TransactionController::class, 'requestWithdraw'])
         ->name('nasabah.withdraw.request');

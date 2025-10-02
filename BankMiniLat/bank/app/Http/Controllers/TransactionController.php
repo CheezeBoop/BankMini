@@ -19,7 +19,53 @@ class TransactionController extends Controller
     }
 
     /**
-     * Permintaan setor tunai oleh nasabah
+     * Tampilkan form setor (GET /nasabah/deposit)
+     */
+    public function showDepositForm()
+    {
+        $nasabah = Nasabah::where('user_id', Auth::id())
+            ->with('rekening')
+            ->firstOrFail();
+
+        $rekening = $nasabah->rekening ?? null;
+        $setting = Setting::first();
+        if (!$setting) {
+            $setting = (object) [
+                'minimal_setor'  => 10000,
+                'maksimal_setor' => 10000000,
+                'minimal_tarik'  => 10000,
+                'maksimal_tarik' => 5000000,
+            ];
+        }
+
+        return view('nasabah.transaksi.deposit', compact('nasabah', 'rekening', 'setting'));
+    }
+
+    /**
+     * Tampilkan form tarik (GET /nasabah/withdraw)
+     */
+    public function showWithdrawForm()
+    {
+        $nasabah = Nasabah::where('user_id', Auth::id())
+            ->with('rekening')
+            ->firstOrFail();
+
+        $rekening = $nasabah->rekening ?? null;
+        $setting = Setting::first();
+        if (!$setting) {
+            $setting = (object) [
+                'minimal_setor'  => 10000,
+                'maksimal_setor' => 10000000,
+                'minimal_tarik'  => 10000,
+                'maksimal_tarik' => 5000000,
+            ];
+        }
+
+        return view('nasabah.transaksi.withdraw', compact('nasabah', 'rekening', 'setting'));
+    }
+
+    /**
+     * Proses request setor (POST)
      */
     public function requestDeposit(Request $request)
     {
@@ -34,18 +80,19 @@ class TransactionController extends Controller
             ->where('nasabah_id', $nasabah->id)
             ->firstOrFail();
 
-        $setting = Setting::firstOrFail();
+        $setting = Setting::first();
+        if (!$setting) {
+            return back()->with('error', 'Pengaturan belum tersedia. Hubungi admin.')->withInput();
+        }
 
-        // ✅ Validasi batas setor
         if ($request->nominal < $setting->minimal_setor) {
-            return back()->with('error', 'Setoran minimal adalah Rp ' . number_format($setting->minimal_setor, 0, ',', '.'));
+            return back()->with('error', 'Setoran minimal adalah Rp ' . number_format($setting->minimal_setor, 0, ',', '.'))->withInput();
         }
 
         if ($request->nominal > $setting->maksimal_setor) {
-            return back()->with('error', 'Setoran maksimal adalah Rp ' . number_format($setting->maksimal_setor, 0, ',', '.'));
+            return back()->with('error', 'Setoran maksimal adalah Rp ' . number_format($setting->maksimal_setor, 0, ',', '.'))->withInput();
         }
 
-        // ✅ Simpan transaksi setor
         DB::transaction(function () use ($request, $rek) {
             $trx = Transaksi::create([
                 'rekening_id'    => $rek->id,
@@ -67,46 +114,12 @@ class TransactionController extends Controller
             ]);
         });
 
-        return redirect()->route('nasabah.dashboard')
-            ->with('info', 'Permintaan setor berhasil dibuat. Silakan ke teller untuk konfirmasi.');
+        return redirect()->route('nasabah.transaksi.index')->with('success', 'Permintaan setor berhasil dibuat. Silakan ke teller untuk konfirmasi.');
     }
 
-    public function index()
-    {
-        $nasabah = Nasabah::where('user_id', Auth::id())
-            ->with('rekening.transaksi')
-            ->firstOrFail();
-
-        $rekening = $nasabah->rekening ?? null;
-
-        return view('nasabah.transaksi.index', compact('nasabah', 'rekening'));
-    }
-
-    public function show($id)
-    {
-        $nasabah = Nasabah::where('user_id', Auth::id())->firstOrFail();
-
-        $trx = Transaksi::whereHas('rekening', function($q) use ($nasabah) {
-            $q->where('nasabah_id', $nasabah->id);
-        })->findOrFail($id);
-
-        return view('nasabah.transaksi.show', compact('trx'));
-    }
-
-        // app/Http/Controllers/TransactionController.php
-    public function history()
-    {
-        $nasabah = \App\Models\Nasabah::where('user_id', Auth::id())
-            ->with(['rekening.transaksi' => function($q) {
-                $q->orderBy('created_at','desc');
-            }])
-            ->firstOrFail();
-
-        $transaksi = $nasabah->rekening ? $nasabah->rekening->transaksi : collect([]);
-
-        return view('nasabah.transaksi.index', compact('nasabah','transaksi'));
-    }
-
+    /**
+     * Proses request tarik (POST)
+     */
     public function requestWithdraw(Request $request)
     {
         $request->validate([
@@ -120,22 +133,23 @@ class TransactionController extends Controller
             ->where('nasabah_id', $nasabah->id)
             ->firstOrFail();
 
-        $setting = Setting::firstOrFail();
+        $setting = Setting::first();
+        if (!$setting) {
+            return back()->with('error', 'Pengaturan belum tersedia. Hubungi admin.')->withInput();
+        }
 
-        // ✅ Validasi batas tarik
         if ($request->nominal < $setting->minimal_tarik) {
-            return back()->with('error', 'Tarik tunai minimal adalah Rp ' . number_format($setting->minimal_tarik, 0, ',', '.'));
+            return back()->with('error', 'Tarik tunai minimal adalah Rp ' . number_format($setting->minimal_tarik, 0, ',', '.'))->withInput();
         }
 
         if ($request->nominal > $setting->maksimal_tarik) {
-            return back()->with('error', 'Tarik tunai maksimal adalah Rp ' . number_format($setting->maksimal_tarik, 0, ',', '.'));
+            return back()->with('error', 'Tarik tunai maksimal adalah Rp ' . number_format($setting->maksimal_tarik, 0, ',', '.'))->withInput();
         }
 
         if ($request->nominal > $rek->saldo) {
-            return back()->with('error', 'Saldo tidak mencukupi.');
+            return back()->with('error', 'Saldo tidak mencukupi.')->withInput();
         }
 
-        // ✅ Simpan transaksi tarik
         DB::transaction(function () use ($request, $rek) {
             $trx = Transaksi::create([
                 'rekening_id'    => $rek->id,
@@ -157,7 +171,36 @@ class TransactionController extends Controller
             ]);
         });
 
-        return redirect()->route('nasabah.dashboard')
-            ->with('info', 'Permintaan tarik berhasil dibuat. Silakan ke teller untuk konfirmasi.');
+        return redirect()->route('nasabah.transaksi.index')->with('success', 'Permintaan tarik berhasil dibuat. Silakan ke teller untuk konfirmasi.');
+    }
+
+    /**
+     * Riwayat transaksi nasabah
+     */
+    public function history()
+    {
+        $nasabah = Nasabah::where('user_id', Auth::id())
+            ->with(['rekening.transaksi' => function ($q) {
+                $q->orderBy('created_at', 'desc');
+            }])
+            ->firstOrFail();
+
+        $transaksi = $nasabah->rekening ? $nasabah->rekening->transaksi : collect([]);
+
+        return view('nasabah.transaksi.index', compact('nasabah', 'transaksi'));
+    }
+
+    /**
+     * Detail transaksi
+     */
+    public function show($id)
+    {
+        $nasabah = Nasabah::where('user_id', Auth::id())->firstOrFail();
+
+        $trx = Transaksi::whereHas('rekening', function ($q) use ($nasabah) {
+            $q->where('nasabah_id', $nasabah->id);
+        })->findOrFail($id);
+
+        return view('nasabah.transaksi.show', compact('trx'));
     }
 }

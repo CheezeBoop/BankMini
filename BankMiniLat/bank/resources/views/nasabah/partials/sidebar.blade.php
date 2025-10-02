@@ -15,16 +15,18 @@
     </a>
 
     {{-- Setor Dana (scroll ke form di dashboard) --}}
-    <a href="#" class="menu-item" data-section="dashboard" data-scroll="#setor-form">
+    <a href="{{ route('nasabah.deposit.form') }}"
+   class="menu-item {{ request()->routeIs('nasabah.deposit.*') ? 'active' : '' }}">
       <i class="bi bi-arrow-down-circle"></i>
       <span>Setor Dana</span>
     </a>
 
     {{-- Tarik Dana --}}
-    <a href="#" class="menu-item" data-section="dashboard" data-scroll="#tarik-form">
+    <a href="{{ route('nasabah.withdraw.form') }}"
+   class="menu-item {{ request()->routeIs('nasabah.withdraw.*') ? 'active' : '' }}">
       <i class="bi bi-arrow-up-circle"></i>
       <span>Tarik Dana</span>
-    </a>
+  </a>
 
     {{-- Riwayat Transaksi (SPA - section di halaman yang sama) --}}
     <a href="#" class="menu-item" data-section="transactions">
