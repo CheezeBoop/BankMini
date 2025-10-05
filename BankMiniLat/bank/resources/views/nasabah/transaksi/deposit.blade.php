@@ -62,6 +62,11 @@
   .welcome-text p{ color:#6b7280; font-size:14px; }
   .header-actions{ display:flex; gap:16px; align-items:center; }
 
+  .time-display{
+    background:linear-gradient(135deg, var(--green-primary), var(--green-dark));
+    color:#fff; padding:10px 16px; border-radius:12px; font-weight:600; display:flex; gap:8px; align-items:center;
+    box-shadow:var(--shadow-sm);
+  }
   .user-avatar{
     width:44px; height:44px; border-radius:50%;
     background:linear-gradient(135deg, var(--cream-light), var(--cream-dark));
@@ -134,6 +139,9 @@
     .main-content{ margin-left:0; width:100%; padding:16px; }
     .top-header{ padding:14px 16px; gap:12px; }
     .welcome-text h3{ font-size:22px; }
+    .header-actions{ gap:10px; }
+    .time-display{ padding:8px 12px; font-size:13px; }
+    .user-avatar{ width:40px; height:40px; font-size:16px; }
     .hamburger{ display:inline-flex; align-items:center; gap:8px; }
     .balance-section{ flex-direction:column; gap:12px; }
     .balance-item.right{ text-align:left; margin-left:0; }
@@ -155,6 +163,10 @@
         <p>Kirim permintaan setor, nanti teller akan memprosesnya.</p>
       </div>
       <div class="header-actions">
+        <div class="time-display">
+          <i class="bi bi-clock"></i>
+          <span id="currentTime">--:--:--</span>
+        </div>
         <div class="user-avatar">{{ strtoupper(substr(Auth::user()->name,0,1)) }}</div>
       </div>
     </div>
@@ -231,29 +243,76 @@
 
 <div class="overlay" id="overlay"></div>
 
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn d-md-none" id="btnFloat" style="
+  position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px;
+  border-radius: 50%; background: linear-gradient(135deg, var(--green-primary), var(--green-dark));
+  color: #fff; border: none; box-shadow: var(--shadow-lg); z-index: 950; display:none;
+">
+  <i class="bi bi-list" style="font-size:24px;"></i>
+</button>
+
 <script>
-  function setAmount(id, amount){
-    const el = document.getElementById(id);
-    if(el) el.value = amount;
+  // Live Clock
+  function updateTime(){
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    const el = document.getElementById('currentTime');
+    if(el) el.textContent = `${h}:${m}:${s}`;
   }
+  updateTime(); setInterval(updateTime,1000);
 
   // Sidebar mobile toggle
   (function(){
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('overlay');
     const btnOpen = document.getElementById('btnOpen');
+    const btnFloat = document.getElementById('btnFloat');
 
-    const open = ()=>{ 
-      if(sidebar) sidebar.classList.add('active'); 
-      if(overlay) overlay.classList.add('show'); 
-    };
-    const close = ()=>{ 
-      if(sidebar) sidebar.classList.remove('active'); 
-      if(overlay) overlay.classList.remove('show'); 
-    };
+    const open = ()=>{ sidebar.classList.add('active'); overlay.classList.add('show'); };
+    const close = ()=>{ sidebar.classList.remove('active'); overlay.classList.remove('show'); };
 
     if(btnOpen) btnOpen.addEventListener('click', open);
+    if(btnFloat) btnFloat.addEventListener('click', open);
     if(overlay) overlay.addEventListener('click', close);
+    window.addEventListener('resize', ()=>{
+      if(window.innerWidth >= 769){ close(); btnFloat.style.display='none'; }
+      else { btnFloat.style.display='block'; }
+    });
+    if(window.innerWidth < 769) btnFloat.style.display='block';
   })();
+
+  // Quick set amount
+  function setAmount(id, amount){ const i = document.getElementById(id); if(i) i.value = amount; }
+
+  // Guard number non-negative
+  document.addEventListener('input', (e)=>{
+    if(e.target.matches('.form-input[type="number"]')){
+      if(e.target.value < 0) e.target.value = 0;
+    }
+  });
+
+  // Close sidebar when clicking outside (mobile)
+  document.addEventListener('click', function(e){
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const inSidebar = sidebar.contains(e.target);
+    const isBtn = e.target.closest('#btnOpen') || e.target.closest('#btnFloat');
+    if(window.innerWidth <= 768 && !inSidebar && !isBtn){
+      overlay.classList.remove('show'); sidebar.classList.remove('active');
+    }
+  });
+
+  // Handle sidebar menu clicks - redirect ke dashboard dengan hash
+  document.querySelectorAll('.menu-item[data-section]').forEach(item => {
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      const section = this.dataset.section;
+      // Redirect ke dashboard dengan hash section
+      window.location.href = "{{ route('nasabah.dashboard') }}" + (section ? '#' + section : '');
+    });
+  });
 </script>
 @endsection
