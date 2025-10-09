@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Livewire;
+namespace App\Livewire;
 
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -10,14 +10,17 @@ class TellerTable extends Component
 {
     use WithPagination;
 
-    protected $paginationTheme = 'bootstrap';
+    // Livewire v3: supaya pagination view pakai Bootstrap
+    public string $paginationTheme = 'bootstrap';
 
     public function render()
     {
-        $tellers = User::whereHas('role', function ($q) {
-            $q->where('name', 'teller');
-        })->paginate(5);
+        $tellers = User::whereHas('role', fn ($q) => $q->where('name', 'teller'))
+            ->orderByDesc('created_at')
+            ->paginate(10);
 
-        return view('livewire.teller-table', compact('tellers'));
+        return view('livewire.teller-table', [
+            'tellers' => $tellers,
+        ]);
     }
 }

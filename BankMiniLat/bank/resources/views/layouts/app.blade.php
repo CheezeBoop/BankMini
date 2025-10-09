@@ -10,20 +10,20 @@
     {{-- Bootstrap CSS --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    {{-- Child views can push extra styles --}}
     @stack('styles')
-    @livewireStyles
+
+    {{-- Load Livewire styles only if package exists --}}
+    @if (class_exists(\Livewire\Livewire::class))
+        @livewireStyles
+    @endif
 </head>
 <body>
 @php
   $user = Auth::user();
 @endphp
 
-{{-- 
-  Navbar hanya untuk:
-  - Guest (belum login), atau
-  - User login yang BUKAN nasabah (admin / teller)
---}}
-@if(!$user || ($user && !$user->isNasabah()))
+@if((!$user || ($user && !$user->isNasabah())) && !request()->is('layanan'))
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container">
     <a class="navbar-brand" href="{{ url('/') }}">Bank Mini</a>
@@ -42,7 +42,6 @@
           @if($user->isTeller())
             <li class="nav-item"><a class="nav-link" href="{{ route('teller.dashboard') }}">Teller</a></li>
           @endif
-          {{-- Tidak menampilkan item "Nasabah" di navbar --}}
         @endauth
       </ul>
 
@@ -64,11 +63,6 @@
 </nav>
 @endif
 
-{{-- 
-  Konten utama:
-  - Untuk nasabah, biarkan child view atur layout (punya sidebar sendiri), jadi pakai container-fluid kosong
-  - Untuk selain nasabah/guest, tetap gunakan .container standar
---}}
 @if($user && $user->isNasabah())
   <div class="container-fluid p-0">
     @yield('content')
@@ -79,11 +73,15 @@
   </div>
 @endif
 
-{{-- Bootstrap JS + Popper --}}
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
 
+{{-- Child views can push extra scripts --}}
 @stack('scripts')
-@livewireScripts
+
+{{-- Load Livewire scripts only if package exists --}}
+@if (class_exists(\Livewire\Livewire::class))
+    @livewireScripts
+@endif
 </body>
 </html>

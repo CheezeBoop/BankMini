@@ -15,6 +15,7 @@ return new class extends Migration {
             $table->string('no_hp')->nullable();
             $table->string('email')->nullable();
             $table->enum('status', ['AKTIF','NONAKTIF'])->default('AKTIF');
+            $table->string('foto')->nullable();
             $table->timestamps();
         });
     }

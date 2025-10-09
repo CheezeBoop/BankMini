@@ -90,16 +90,14 @@ Route::prefix('nasabah')->middleware(['auth', 'role:nasabah'])->group(function (
     Route::get('/dashboard', [NasabahController::class, 'dashboard'])->name('nasabah.dashboard');
     Route::get('/profile',   [NasabahController::class, 'profile'])->name('nasabah.profile');
 
-    // Riwayat transaksi (index)
-    Route::get('/transaksi', [TransactionController::class, 'history'])->name('nasabah.transaksi.index');
-
-    // Form khusus Setor / Tarik (lihat controller)
-    Route::get('/deposit',  [TransactionController::class, 'showDepositForm'])->name('nasabah.deposit.form');
-    Route::get('/withdraw', [TransactionController::class, 'showWithdrawForm'])->name('nasabah.withdraw.form');
-
-    // Proses request (POST)
-    Route::post('/deposit/request',  [TransactionController::class, 'requestDeposit'])
+    // Proses request (POST) - langsung di NasabahController
+    Route::post('/deposit/request',  [NasabahController::class, 'requestDeposit'])
         ->name('nasabah.deposit.request');
-    Route::post('/withdraw/request', [TransactionController::class, 'requestWithdraw'])
+    Route::post('/withdraw/request', [NasabahController::class, 'requestWithdraw'])
         ->name('nasabah.withdraw.request');
 });
+
+
+Route::get('/layanan', function () {
+    return view('layanan'); // resources/views/layanan.blade.php
+})->name('layanan');
