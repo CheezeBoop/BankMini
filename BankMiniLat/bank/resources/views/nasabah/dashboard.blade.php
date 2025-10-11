@@ -656,11 +656,7 @@
 
           <div class="profile-header-content">
             <div class="profile-avatar-large">
-              @if($fotoUrl)
-                <img src="{{ $fotoUrl }}" alt="{{ $nasabah->nama }}">
-              @else
-                {{ strtoupper(substr($nasabah->nama,0,1)) }}
-              @endif
+              {{ strtoupper(substr($nasabah->nama, 0, 1)) }}
             </div>
             <div class="profile-info">
               <h3>{{ $nasabah->nama }}</h3>

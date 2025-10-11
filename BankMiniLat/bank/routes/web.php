@@ -58,6 +58,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('teller')->middleware(['auth', 'role:teller'])->group(function () {
+    // Dashboard utama teller
     Route::get('/dashboard', [TellerController::class, 'dashboard'])->name('teller.dashboard');
 
     // Form buat nasabah baru (opsional bisa pake modal)
@@ -68,16 +69,16 @@ Route::prefix('teller')->middleware(['auth', 'role:teller'])->group(function () 
     // Simpan nasabah baru
     Route::post('/nasabah/store', [TellerController::class, 'storeNasabah'])->name('teller.nasabah.store');
 
-    // Transaksi
+    // Transaksi setor & tarik
     Route::post('/rekening/{id}/setor', [TellerController::class, 'setor'])->name('teller.setor');
     Route::post('/rekening/{id}/tarik', [TellerController::class, 'tarik'])->name('teller.tarik');
-    Route::post('/transaksi/{id}/confirm', [TellerController::class, 'confirmTransaksi'])
-        ->name('teller.transaksi.confirm');
 
+    // Konfirmasi & tolak transaksi
+    Route::post('/transaksi/{id}/confirm', [TellerController::class, 'confirmTransaksi'])->name('teller.transaksi.confirm');
+    Route::post('/transaksi/{id}/reject', [TellerController::class, 'rejectTransaction'])->name('teller.transaksi.reject');
 
-    // edit profil nasabah
-    Route::put('/nasabah/{id}/update', [TellerController::class, 'updateNasabah'])
-    ->name('teller.nasabah.update');
+    // Edit profil nasabah
+    Route::put('/nasabah/{id}/update', [TellerController::class, 'updateNasabah'])->name('teller.nasabah.update');
 });
 
 /*

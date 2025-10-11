@@ -6,7 +6,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use App\Models\Nasabah;
 use App\Models\Rekening;
 use App\Models\Transaksi;
@@ -158,84 +157,6 @@ class TellerController extends Controller
         return back()->with('success', 'Penarikan berhasil.');
     }
 
-    public function rejectTransaction($id)
-    {
-        DB::transaction(function () use ($id) {
-            $trx = Transaksi::findOrFail($id);
-            if ($trx->status !== 'PENDING') {
-                throw new \Exception('Transaksi sudah diproses');
-            }
-
-            $trx->update([
-                'status'         => 'REJECTED',
-                'admin_approved' => false,
-                'keterangan'     => $trx->keterangan . ' (Ditolak oleh teller)'
-            ]);
-
-            AuditLog::create([
-                'user_id'    => Auth::id(),
-                'aksi'       => 'reject_transaksi',
-                'entitas'    => 'transaksi',
-                'entitas_id' => $trx->id,
-                'ip_addr'    => request()->ip(),
-            ]);
-        });
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Transaksi berhasil ditolak'
-        ]);
-    }
-
-    public function getTransactionDetails($id)
-    {
-        $transaction = Transaksi::with(['rekening.nasabah', 'user'])->findOrFail($id);
-        $html = view('teller.partials.transaction-details', compact('transaction'))->render();
-
-        return response()->json([
-            'success' => true,
-            'html'    => $html
-        ]);
-    }
-
-    public function getAccountHistory($id)
-    {
-        $rekening = Rekening::with(['nasabah', 'transaksi' => function ($q) {
-            $q->orderBy('created_at', 'desc')->limit(20);
-        }])->findOrFail($id);
-
-        return view('teller.account-history', compact('rekening'));
-    }
-
-    public function printStatement($id)
-    {
-        $rekening = Rekening::with(['nasabah', 'transaksi' => function ($q) {
-            $q->where('status', 'CONFIRMED')->orderBy('created_at', 'desc');
-        }])->findOrFail($id);
-
-        return view('teller.print.statement', compact('rekening'));
-    }
-
-    public function exportExcel()
-    {
-        $nasabahs = Rekening::with('nasabah')->get();
-        return Excel::download(new NasabahExport($nasabahs), 'laporan-nasabah-' . date('Y-m-d') . '.xlsx');
-    }
-
-    public function printDailyReport()
-    {
-        $today = now()->toDateString();
-
-        $data = [
-            'total_nasabah'  => Nasabah::count(),
-            'total_saldo'    => Rekening::sum('saldo'),
-            'transaksi_hari' => Transaksi::whereDate('created_at', $today)->get(),
-            'pending_count'  => Transaksi::where('status', 'PENDING')->count(),
-        ];
-
-        return view('teller.print.daily-report', $data);
-    }
-
     public function storeNasabah(Request $r)
     {
         $r->validate([
@@ -247,7 +168,6 @@ class TellerController extends Controller
             'no_hp'          => 'nullable|string|max:30',
             'alamat'         => 'nullable|string|max:255',
             'jenis_kelamin'  => 'nullable|in:L,P',
-            'photo'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048|dimensions:min_width=256,min_height=256',
         ]);
 
         $roleId = Role::firstOrCreate(['name' => 'nasabah'])->id;
@@ -269,7 +189,6 @@ class TellerController extends Controller
                 'no_hp'         => $r->no_hp,
                 'email'         => $r->email,
                 'status'        => 'AKTIF',
-                'photo_path'    => $photoPath,
             ]);
 
             $noRek = 'REK' . str_pad((string) $nasabah->id, 6, '0', STR_PAD_LEFT);
@@ -281,16 +200,6 @@ class TellerController extends Controller
                 'status'       => 'AKTIF',
                 'saldo'        => $r->saldo,
             ]);
-
-            if ($r->hasFile('photo')) {
-                $file     = $r->file('photo');
-                $basename = 'nasabah_' . uniqid();
-                $path     = $file->storeAs('nasabah/photos', $basename . '.' . $file->extension(), 'public');
-                $nasabah->update([
-                    'photo_path'       => $path,
-                    'photo_thumb_path' => $path,
-                ]);
-            }
 
             AuditLog::create([
                 'user_id'    => Auth::id(),
@@ -326,7 +235,7 @@ class TellerController extends Controller
             }
             $rek->save();
 
-            $trx->status        = 'CONFIRMED';
+            $trx->status         = 'CONFIRMED';
             $trx->admin_approved = true;
             $trx->saldo_setelah  = $rek->saldo;
             $trx->save();
@@ -343,6 +252,36 @@ class TellerController extends Controller
         return back()->with('success', 'Transaksi berhasil dikonfirmasi!');
     }
 
+    public function rejectTransaction($id)
+    {
+        DB::transaction(function () use ($id) {
+            $trx = Transaksi::findOrFail($id);
+
+            if ($trx->status !== 'PENDING') {
+                throw new \Exception('Transaksi sudah diproses.');
+            }
+
+            // Ubah status jadi REJECTED
+            $trx->update([
+                'status' => 'REJECTED',
+                'admin_approved' => false,
+                'keterangan' => $trx->keterangan . ' (Ditolak oleh teller)'
+            ]);
+
+            // Catat di log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'aksi' => 'reject_transaksi',
+                'entitas' => 'transaksi',
+                'entitas_id' => $trx->id,
+                'ip_addr' => request()->ip(),
+            ]);
+        });
+
+        return back()->with('success', 'Transaksi berhasil ditolak.');
+    }
+
+
     public function updateNasabah(Request $r, $id)
     {
         $r->validate([
@@ -351,7 +290,7 @@ class TellerController extends Controller
             'no_hp'         => 'nullable|string|max:20',
             'alamat'        => 'nullable|string',
             'jenis_kelamin' => 'nullable|in:L,P',
-            'photo'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048|dimensions:min_width=256,min_height=256',
+            'status'        => 'required|string|in:AKTIF,NONAKTIF',
         ]);
 
         $rekening = Rekening::findOrFail($id);
@@ -370,24 +309,6 @@ class TellerController extends Controller
             'jenis_kelamin' => $r->jenis_kelamin,
             'status'        => $r->status,
         ]);
-
-        if ($r->hasFile('photo')) {
-            if ($nasabah->photo_path) {
-                Storage::disk('public')->delete($nasabah->photo_path);
-            }
-            if ($nasabah->photo_thumb_path && $nasabah->photo_thumb_path !== $nasabah->photo_path) {
-                Storage::disk('public')->delete($nasabah->photo_thumb_path);
-            }
-
-            $file     = $r->file('photo');
-            $basename = 'nasabah_' . uniqid();
-            $path     = $file->storeAs('nasabah/photos', $basename . '.' . $file->extension(), 'public');
-
-            $nasabah->update([
-                'photo_path'       => $path,
-                'photo_thumb_path' => $path,
-            ]);
-        }
 
         return back()->with('success', 'Profil nasabah berhasil diperbarui.');
     }

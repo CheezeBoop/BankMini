@@ -16,7 +16,7 @@ class NasabahController extends Controller
         $this->middleware(['auth', 'role:nasabah']);
     }
 
-   public function dashboard()
+    public function dashboard()
     {
         // Ambil nasabah berdasarkan user yang login
         $nasabah = Nasabah::where('user_id', Auth::id())
@@ -47,14 +47,7 @@ class NasabahController extends Controller
             ];
         }
 
-        $fotoUrl = null;
-    if ($nasabah->photo_thumb_path) {
-        $fotoUrl = asset('storage/' . $nasabah->photo_thumb_path);
-    } elseif ($nasabah->photo_path) {
-        $fotoUrl = asset('storage/' . $nasabah->photo_path);
-    }
-
-    return view('nasabah.dashboard', compact('nasabah', 'rekening', 'setting', 'fotoUrl'));
+        return view('nasabah.dashboard', compact('nasabah', 'rekening', 'setting'));
     }
 
     public function profile()
@@ -66,7 +59,6 @@ class NasabahController extends Controller
         return view('nasabah.profile', compact('nasabah'));
     }
 
-    // PASTIKAN METHOD NAME INI SESUAI DENGAN ROUTES
     public function requestDeposit(Request $request)
     {
         $request->validate([
@@ -75,33 +67,28 @@ class NasabahController extends Controller
         ]);
 
         try {
-            // Cek apakah rekening milik user yang login
             $rekening = Rekening::where('id', $request->rekening_id)
                 ->whereHas('nasabah', function($q) {
                     $q->where('user_id', Auth::id());
                 })
                 ->firstOrFail();
 
-            // Cek status nasabah
             if ($rekening->nasabah->status !== 'AKTIF') {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Akun Anda tidak aktif. Tidak dapat melakukan transaksi.');
             }
 
-            // Cek aturan minimal setor
             $setting = Setting::first();
             if ($setting && $request->nominal < $setting->minimal_setor) {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Nominal setor minimal Rp ' . number_format($setting->minimal_setor, 0, ',', '.'));
             }
 
-            // Cek aturan maksimal setor
             if ($setting && $request->nominal > $setting->maksimal_setor) {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Nominal setor maksimal Rp ' . number_format($setting->maksimal_setor, 0, ',', '.'));
             }
 
-            // Buat transaksi setor
             Transaksi::create([
                 'rekening_id' => $rekening->id,
                 'jenis' => 'SETOR',
@@ -119,7 +106,6 @@ class NasabahController extends Controller
         }
     }
 
-    // PASTIKAN METHOD NAME INI SESUAI DENGAN ROUTES  
     public function requestWithdraw(Request $request)
     {
         $request->validate([
@@ -128,39 +114,33 @@ class NasabahController extends Controller
         ]);
 
         try {
-            // Cek apakah rekening milik user yang login
             $rekening = Rekening::where('id', $request->rekening_id)
                 ->whereHas('nasabah', function($q) {
                     $q->where('user_id', Auth::id());
                 })
                 ->firstOrFail();
 
-            // Cek status nasabah
             if ($rekening->nasabah->status !== 'AKTIF') {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Akun Anda tidak aktif. Tidak dapat melakukan transaksi.');
             }
 
-            // Cek aturan minimal tarik
             $setting = Setting::first();
             if ($setting && $request->nominal < $setting->minimal_tarik) {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Nominal tarik minimal Rp ' . number_format($setting->minimal_tarik, 0, ',', '.'));
             }
 
-            // Cek aturan maksimal tarik
             if ($setting && $request->nominal > $setting->maksimal_tarik) {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Nominal tarik maksimal Rp ' . number_format($setting->maksimal_tarik, 0, ',', '.'));
             }
 
-            // Cek saldo mencukupi
             if ($rekening->saldo < $request->nominal) {
                 return redirect()->route('nasabah.dashboard')
                     ->with('error', 'Saldo tidak mencukupi. Saldo Anda: Rp ' . number_format($rekening->saldo, 0, ',', '.'));
             }
 
-            // Buat transaksi tarik
             Transaksi::create([
                 'rekening_id' => $rekening->id,
                 'jenis' => 'TARIK',
